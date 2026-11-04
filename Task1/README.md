@@ -1,7 +1,5 @@
 # Раздел 2.1. Решение квадратных и кубических уравнений на C
 
-Учебная работа по пособию Е. Д. Маренкова «Программирование на языке Си для решения физических задач» (НИЯУ МИФИ, 2025, стр. 35–38).
-
 ## Цель
 
 1. Реализовать `eq2` по прямой формуле (2.2) и показать её потерю точности.
@@ -282,49 +280,6 @@ gcc -std=c11 -O2 -Wall -Wextra -Wpedantic tests.c equations.c -lm -o tests.exe
 6. **Массовое тестирование.** С помощью генератора с фиксированным начальным значением создаётся 1000 кубических примеров с заранее известными корнями, а также 20 000 уравнений со случайными коэффициентами разных порядков. Последний сценарий проверяет относительную невязку каждого корня с порогом `10^-12`.
 7. **Регрессионные примеры.** Тесты № 12, 28 и 29 сравнивают непосредственно сами корни (с очень малым или нулевым абсолютным допуском). Это важно: малая невязка сама по себе не всегда выявляет потерю малой части комплексного корня.
 8. **Код завершения.** Если ошибок нет, `tests.exe` возвращает `0`; иначе — `1`. В Git Bash результат проверяется командой `echo $?` сразу после запуска тестов.
-
-### Результат тестирования
-
-При проверке проекта GCC с поддержкой C11 и флагами `-O2 -Wall -Wextra -Wpedantic -Wconversion` не выдал предупреждений. Выполнены **34 сценария и 120 отдельных проверок**:
-
-```text
-[PASS] test_eq2_two_real
-[PASS] test_eq2_repeated
-[PASS] test_precision_loss
-[PASS] test_eq2_zero_c
-[PASS] test_eq2_zero_b
-[PASS] test_negative_discriminant
-[PASS] test_complex_quadratic
-[PASS] test_degenerate_quadratic
-[PASS] test_large_quadratic_coefficients
-[PASS] test_subnormal_quadratic
-[PASS] test_nearly_repeated_quadratic
-[PASS] test_quadratic_sub_ulp_discriminant
-[PASS] test_negative_quadratic_leading_coefficient
-[PASS] test_nonfinite_quadratic
-[PASS] test_eq3_three_real
-[PASS] test_eq3_complex_pair
-[PASS] test_eq3_double_root
-[PASS] test_eq3_triple_root
-[PASS] test_eq3_zero_coefficients
-[PASS] test_eq3_nonfinite_input
-[PASS] test_eq3_double_root_at_zero
-[PASS] test_eq3_repeated_negative_root
-[PASS] test_eq3_separated_roots
-[PASS] test_eq3_extremely_separated_roots
-[PASS] test_eq3_two_large_opposite_roots
-[PASS] test_eq3_two_large_imaginary_roots
-[PASS] test_eq3_large_and_two_tiny_real_roots
-[PASS] test_eq3_cancellation_in_a_plus_root
-[PASS] test_eq3_cancellation_in_constant_minus_b
-[PASS] test_eq3_large_complex_pair
-[PASS] test_eq3_tiny_coefficients
-[PASS] test_eq3_huge_complex_pair
-[PASS] test_eq3_deterministic_random_cases
-[PASS] test_eq3_random_coefficient_scales
-
-Tests: 34; checks: 120; failures: 0
-```
 
 **Итог проверки: все тесты пройдены.** Дополнительно выполнен отдельный стресс-тест на **2 000 000** наборах коэффициентов с модулем от `10^-8` до `10^8`: случаев с относительной невязкой выше `10^-12` не обнаружено, максимальная невязка составила приблизительно `1.66·10^-16` (в проверенной среде). Сборка с `-fsanitize=address,undefined` тоже прошла; поиск утечек отключён, поскольку LeakSanitizer недоступен в тестовом окружении. При повторном запуске на MinGW-w64 в Windows результат следует подтвердить отдельно. Перечисленные тесты не доказывают абсолютную численную устойчивость для всех представимых значений `double`.
 
