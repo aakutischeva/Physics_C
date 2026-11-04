@@ -3,7 +3,6 @@
 #include <math.h>
 #include <stddef.h>
 
-/* Some older MinGW <complex.h> headers omit the C11 CMPLX macro. */
 #ifndef CMPLX
 #define CMPLX(real, imag) ((double complex)((real) + (imag) * I))
 #endif
@@ -19,7 +18,6 @@ void eq2(double a, double b, double c, double *x1, double *x2)
     if (a == 0.0 || !isfinite(a) || !isfinite(b) || !isfinite(c))
         return;
 
-    /* Keep the textbook's naive double-precision calculation unchanged. */
     double discriminant = b * b - 4.0 * a * c;
     if (discriminant < 0.0 || isnan(discriminant))
         return;
@@ -40,7 +38,6 @@ void eq2_correct(double a, double b, double c, double *x1, double *x2)
     if (a == 0.0 || !isfinite(a) || !isfinite(b) || !isfinite(c))
         return;
 
-    /* Long double reduces intermediate overflow and rounding errors. */
     long double aa = a;
     long double bb = b;
     long double cc = c;
@@ -49,7 +46,6 @@ void eq2_correct(double a, double b, double c, double *x1, double *x2)
     if (discriminant < 0.0L)
         return;
 
-    /* When c=0, q may be zero and c/q would be undefined. */
     if (c == 0.0) {
         *x1 = 0.0;
         *x2 = (double)(-bb / aa);
@@ -142,7 +138,6 @@ void eq3(double a, double b, double c,
         *x3 = CMPLX((double)(factor * cosl((t - 2.0L * pi) / 3.0L)
                                - shift), 0.0);
     } else {
-        /* One real root and a conjugate pair (possibly repeated real roots). */
         long double delta = r2 - q3;
         long double big_a = -copysignl(cbrtl(fabsl(r) + sqrtl(delta)), r);
         long double big_b = (big_a == 0.0L) ? 0.0L : q / big_a;
