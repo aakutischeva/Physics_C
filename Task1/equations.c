@@ -30,6 +30,18 @@ void eq2(double a, double b, double c, double *x1, double *x2)
     *x2 = (-b - root) / (2.0 * a);
 }
 
+/* Recover the low bits lost when the two products nearly cancel.
+   fmal computes each product's rounding error in one operation. */
+static long double quadratic_discriminant(long double a,
+                                          long double b, long double c)
+{
+    long double bb = b * b;
+    long double ac = (4.0L * a) * c;
+    long double bb_low = fmal(b, b, -bb);
+    long double ac_low = fmal(4.0L * a, c, -ac);
+    return (bb - ac) + (bb_low - ac_low);
+}
+
 void eq2_correct(double a, double b, double c, double *x1, double *x2)
 {
     if (x1 == NULL || x2 == NULL)
@@ -64,7 +76,7 @@ void eq2_correct(double a, double b, double c, double *x1, double *x2)
         return;
     }
 
-    long double discriminant = bb * bb - 4.0L * aa * cc;
+    long double discriminant = quadratic_discriminant(aa, bb, cc);
     if (discriminant < 0.0L)
         return;
 
@@ -110,7 +122,7 @@ void eq2_correct_complex(double a, double b, double c,
         return;
     }
 
-    long double discriminant = bb * bb - 4.0L * aa * cc;
+    long double discriminant = quadratic_discriminant(aa, bb, cc);
 
     if (discriminant >= 0.0L) {
         double real1, real2;
@@ -238,14 +250,15 @@ static void cubic_deflate(long double real_root, long double a,
         if (isfinite(from_product))
             constant = from_product;
 
-        /* If a and the large root cancel, a+root loses the small
-           quadratic coefficient; recover it using b=d-root*linear. */
-        if (fabsl(linear) <= 32.0L * LDBL_EPSILON
-                              * (fabsl(a) + fabsl(real_root))) {
-            long double from_middle = (constant - b) / real_root;
-            if (isfinite(from_middle))
-                linear = from_middle;
-        }
+        /* Two formulas for the linear coefficient may each suffer
+           cancellation. Use the one with the smaller cancellation
+           condition estimate, not a fixed threshold for a+root. */
+        long double difference = constant - b;
+        long double from_middle = difference / real_root;
+        if (isfinite(from_middle)
+            && fabsl(linear) * (fabsl(constant) + fabsl(b))
+               < fabsl(difference) * (fabsl(a) + fabsl(real_root)))
+            linear = from_middle;
     }
     long double discr = linear * linear - 4.0L * constant;
 

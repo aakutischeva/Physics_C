@@ -94,31 +94,36 @@ static void check_triple(double complex a, double complex b, double complex c,
     check(triple_matches(a, b, c, x, y, z, tolerance, tolerance), message);
 }
 
+static long double cubic_relative_error(double a, double b, double c,
+                                        double complex r)
+{
+    long double re = creal(r);
+    long double im = cimag(r);
+    long double t_re = re + a;
+    long double t_im = im;
+    long double v_re = t_re * re - t_im * im + b;
+    long double v_im = t_re * im + t_im * re;
+    t_re = v_re * re - v_im * im + c;
+    t_im = v_re * im + v_im * re;
+    long double radius = hypotl(re, im);
+    long double scale = radius * radius * radius
+                        + fabsl(a) * radius * radius
+                        + fabsl(b) * radius + fabsl(c);
+    long double residual = hypotl(t_re, t_im);
+    if (!isfinite(t_re) || !isfinite(t_im))
+        return INFINITY;
+    return scale == 0.0L ? (residual == 0.0L ? 0.0L : INFINITY)
+                         : residual / scale;
+}
+
 static void check_cubic_residuals(double a, double b, double c,
                                   double complex x, double complex y,
                                   double complex z)
 {
     double complex roots[3] = {x, y, z};
-    for (int i = 0; i < 3; ++i) {
-        double complex r = roots[i];
-        long double re = creal(r);
-        long double im = cimag(r);
-        long double t_re = re + a;
-        long double t_im = im;
-        long double v_re = t_re * re - t_im * im + b;
-        long double v_im = t_re * im + t_im * re;
-        t_re = v_re * re - v_im * im + c;
-        t_im = v_re * im + v_im * re;
-        long double radius = hypotl(re, im);
-        long double scale = radius * radius * radius
-                            + fabsl(a) * radius * radius
-                            + fabsl(b) * radius + fabsl(c);
-        long double residual = hypotl(t_re, t_im);
-        check(isfinite(t_re) && isfinite(t_im)
-              && (scale == 0.0L ? residual == 0.0L
-                                : residual <= 1e-11L * scale),
+    for (int i = 0; i < 3; ++i)
+        check(cubic_relative_error(a, b, c, roots[i]) <= 1e-11L,
               "each cubic root must satisfy the original equation");
-    }
 }
 
 static void check_quadratic_residual(double a, double b, double c, double x)
@@ -254,6 +259,23 @@ static void test_nearly_repeated_quadratic(void)
                "stable quadratic: small positive discriminant");
     check_quadratic_residual(1.0, -2.0, c, x);
     check_quadratic_residual(1.0, -2.0, c, y);
+}
+
+static void test_quadratic_sub_ulp_discriminant(void)
+{
+    /* The exact discriminant is 4*2^-104, smaller than a long double
+       multiplication's rounding error relative to the two products. */
+    double a = 1.0 + 0x1p-52;
+    double c = 1.0 - 0x1p-52;
+    double x, y;
+    double complex z1, z2;
+
+    eq2_correct(a, -2.0, c, &x, &y);
+    check_pair(x, y, 1.0, c / a, 0.0,
+               "stable quadratic: distinguish roots with sub-ULP discriminant");
+    eq2_correct_complex(a, -2.0, c, &z1, &z2);
+    check_complex_pair(z1, z2, 1.0, c / a,
+                       0.0, "complex quadratic: preserve distinct real roots");
 }
 
 static void test_negative_quadratic_leading_coefficient(void)
@@ -420,6 +442,32 @@ static void test_eq3_large_and_two_tiny_real_roots(void)
     check_cubic_residuals(-huge, 2.0, -tiny, x, y, z);
 }
 
+static void test_eq3_cancellation_in_a_plus_root(void)
+{
+    double complex x, y, z;
+    eq3(-53393.4, -0.0178583, -4.07773e-07, &x, &y, &z);
+    check(triple_matches(x, y, z, 53393.40000033447,
+                         -1.672332161608483e-7 + 2.758473394781249e-6 * I,
+                         -1.672332161608483e-7 - 2.758473394781249e-6 * I,
+                         1e-12, 0.0),
+          "eq3: recover the tiny real part of a complex pair");
+    check_cubic_residuals(-53393.4, -0.0178583, -4.07773e-07, x, y, z);
+}
+
+static void test_eq3_cancellation_in_constant_minus_b(void)
+{
+    double complex x, y, z;
+    eq3(-3.653717314518832e-8, 6178.8656383478101,
+        -0.00022415231141547279, &x, &y, &z);
+    check(triple_matches(x, y, z, 3.6277259376594845e-8,
+                         1.299568842967374e-10 + 78.60576084707667 * I,
+                         1.299568842967374e-10 - 78.60576084707667 * I,
+                         1e-12, 0.0),
+          "eq3: do not use b-based deflation when b and constant cancel");
+    check_cubic_residuals(-3.653717314518832e-8, 6178.8656383478101,
+                          -0.00022415231141547279, x, y, z);
+}
+
 static void test_eq3_large_complex_pair(void)
 {
     double complex x, y, z;
@@ -497,6 +545,27 @@ static void test_eq3_deterministic_random_cases(void)
     check(all_complex_ok, "eq3: 500 reproducible conjugate-pair cases");
 }
 
+static void test_eq3_random_coefficient_scales(void)
+{
+    int ok = 1;
+    for (int i = 0; i < 20000; ++i) {
+        double a = pow(10.0, 1.6 * sample_coefficient());
+        double b = pow(10.0, 1.6 * sample_coefficient());
+        double c = pow(10.0, 1.6 * sample_coefficient());
+        if (sample_coefficient() < 0.0) a = -a;
+        if (sample_coefficient() < 0.0) b = -b;
+        if (sample_coefficient() < 0.0) c = -c;
+
+        double complex x, y, z;
+        eq3(a, b, c, &x, &y, &z);
+        if (cubic_relative_error(a, b, c, x) > 1e-12L
+            || cubic_relative_error(a, b, c, y) > 1e-12L
+            || cubic_relative_error(a, b, c, z) > 1e-12L)
+            ok = 0;
+    }
+    check(ok, "eq3: 20000 coefficient-scale examples have small residuals");
+}
+
 #define RUN_TEST(function) do {                          \
     int before = failures;                               \
     function();                                          \
@@ -518,6 +587,7 @@ int main(void)
     RUN_TEST(test_large_quadratic_coefficients);
     RUN_TEST(test_subnormal_quadratic);
     RUN_TEST(test_nearly_repeated_quadratic);
+    RUN_TEST(test_quadratic_sub_ulp_discriminant);
     RUN_TEST(test_negative_quadratic_leading_coefficient);
     RUN_TEST(test_nonfinite_quadratic);
     RUN_TEST(test_eq3_three_real);
@@ -533,10 +603,13 @@ int main(void)
     RUN_TEST(test_eq3_two_large_opposite_roots);
     RUN_TEST(test_eq3_two_large_imaginary_roots);
     RUN_TEST(test_eq3_large_and_two_tiny_real_roots);
+    RUN_TEST(test_eq3_cancellation_in_a_plus_root);
+    RUN_TEST(test_eq3_cancellation_in_constant_minus_b);
     RUN_TEST(test_eq3_large_complex_pair);
     RUN_TEST(test_eq3_tiny_coefficients);
     RUN_TEST(test_eq3_huge_complex_pair);
     RUN_TEST(test_eq3_deterministic_random_cases);
+    RUN_TEST(test_eq3_random_coefficient_scales);
 
     printf("\nTests: %d; checks: %d; failures: %d\n",
            tests_run, checks, failures);
